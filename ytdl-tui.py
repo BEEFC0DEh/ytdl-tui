@@ -20,8 +20,7 @@ class FmtList(npyscreen.SelectOne):
     def display_value(self, vl):
         return '{}'.format(vl.text)
 
-
-class TestApp(npyscreen.NPSApp):
+class FormatsForm(npyscreen.ActionForm):
     audio_fmts = []
     video_fmts = []
     url = 'https://www.youtube.com/watch?v=2MpUj-Aua48'
@@ -77,33 +76,39 @@ class TestApp(npyscreen.NPSApp):
             except KeyError:
                 print('Unknown id/codec.')
 
-    def main(self):
+    def create(self):
         self.fill_models()
 
-        main_form = npyscreen.Form(name="Select preferred formats", minimum_lines=20)
-
-        main_form.add(npyscreen.FixedText, value="Video", max_width=40, editable=False)
-        video = main_form.add(FmtList, value=[0], name="Video", max_width=40, max_height=16,
+        self.add(npyscreen.FixedText, value="Video", max_width=40, editable=False)
+        self.video = self.add(FmtList, value=[0], name="Video", max_width=40, max_height=16,
                             values=self.video_fmts, scroll_exit=True, exit_right=True)
 
-        main_form.add(npyscreen.FixedText, value="Audio", max_width=40, editable=False, relx=42, rely=2)
-        audio = main_form.add(FmtList, value=[0], name="Audio", max_width=40, max_height=16,
+        self.add(npyscreen.FixedText, value="Audio", max_width=40, editable=False, relx=42, rely=2)
+        self.audio = self.add(FmtList, value=[0], name="Audio", max_width=40, max_height=16,
                             values=self.audio_fmts, scroll_exit=True, exit_left=True, relx=42, rely=3)
 
-        # This lets the user interact with the Form.
-        main_form.edit()
-
+    def on_ok(self):
+        self.parentApp.setNextForm(None)
         import curses
         curses.endwin()
 
-        ids = [self.video_fmts[video.value[0]].fmtId,
-               self.audio_fmts[audio.value[0]].fmtId]
+        ids = [self.video_fmts[self.video.value[0]].fmtId,
+               self.audio_fmts[self.audio.value[0]].fmtId]
         prefs = '{}+{}'.format(ids[0], ids[1])
         print(prefs)
         run(["mpv --term-status-msg='Video bitrate: ${{video-bitrate}}, audio bitrate: ${{audio-bitrate}}' --ytdl-format {} {}".format(
             prefs, self.url)], shell=True)
 
+    def on_cancel(self):
+        self.parentApp.setNextForm(None)
+
+class YtdlTui(npyscreen.NPSAppManaged):
+    STARTING_FORM = 'FORMATS'
+
+    def onStart(self):
+        self.addForm('FORMATS', FormatsForm, name="Select preferred formats", minimum_lines=20)
+
 
 if __name__ == "__main__":
-    App = TestApp()
+    App = YtdlTui()
     App.run()
