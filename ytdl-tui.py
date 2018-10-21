@@ -14,16 +14,20 @@ class Fmt(object):
 
 
 class FmtList(npyscreen.SelectOne):
-    def __init__(self, *args, **keywords):
-        super(FmtList, self).__init__(*args, **keywords)
-
     def display_value(self, vl):
         return '{}'.format(vl.text)
 
+
 class FormatsForm(npyscreen.ActionForm):
-    audio_fmts = []
-    video_fmts = []
-    url = 'https://www.youtube.com/watch?v=2MpUj-Aua48'
+    def __init__(self, *args, **keywords):
+        self.url = keywords['url']
+        self.audio_fmts = []
+        self.video_fmts = []
+
+        # This method will call create() directly so
+        # we need to call it after the variables are
+        # initialized.
+        super(npyscreen.ActionForm, self).__init__(*args, **keywords)
 
     @staticmethod
     def get_size_string(kilobytes):
@@ -45,9 +49,6 @@ class FormatsForm(npyscreen.ActionForm):
         lst.append(Fmt(fmtId, s))
 
     def download_json(self):
-        if len(sys.argv) > 1:
-            self.url = sys.argv[1]
-
         print('Querying formats for {}'.format(self.url))
         result = check_output(['youtube-dl -j {}'.format(self.url)], shell=True).decode('utf-8')
         # result = run( [ 'youtube-dl -j {}'.format(self.url) ], shell=True, capture_output=True, text=True )
@@ -89,26 +90,35 @@ class FormatsForm(npyscreen.ActionForm):
 
     def on_ok(self):
         self.parentApp.setNextForm(None)
-        import curses
-        curses.endwin()
 
         ids = [self.video_fmts[self.video.value[0]].fmtId,
                self.audio_fmts[self.audio.value[0]].fmtId]
-        prefs = '{}+{}'.format(ids[0], ids[1])
-        print(prefs)
-        run(["mpv --term-status-msg='Video bitrate: ${{video-bitrate}}, audio bitrate: ${{audio-bitrate}}' --ytdl-format {} {}".format(
-            prefs, self.url)], shell=True)
+        self.parentApp.prefs = '{}+{}'.format(ids[0], ids[1])
 
     def on_cancel(self):
         self.parentApp.setNextForm(None)
 
+
 class YtdlTui(npyscreen.NPSAppManaged):
     STARTING_FORM = 'FORMATS'
+    prefs = None
 
     def onStart(self):
-        self.addForm('FORMATS', FormatsForm, name="Select preferred formats", minimum_lines=20)
+        self.url = 'https://www.youtube.com/watch?v=2MpUj-Aua48'
+        if len(sys.argv) > 1:
+            self.url = sys.argv[1]
+        self.addForm('FORMATS', FormatsForm, url=self.url, name="Select preferred formats", minimum_lines=20)
 
 
 if __name__ == "__main__":
-    App = YtdlTui()
-    App.run()
+    app = YtdlTui()
+    app.run()
+
+    prefs = app.prefs
+    print(prefs)
+
+    if prefs:
+        command = ("mpv --term-status-msg='Video bitrate: ${{video-bitrate}},"
+                " audio bitrate: ${{audio-bitrate}}' --ytdl-format {} {}")
+
+        run([command.format(prefs, app.url)], shell=True)
